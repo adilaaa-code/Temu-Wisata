@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "443636485902",
+    "project_id": "temu-wisata",
+    "storage_bucket": "temu-wisata.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:443636485902:android:d75ed0f3d2a6bf5bf5915f",
+        "android_client_info": {
+          "package_name": "com.example.mdi"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD6Zhpidynlq1SGUmmOoyQ61lAQhrZ_s4U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

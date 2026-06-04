@@ -268,30 +268,68 @@ class _GeminiChatSheetState extends State<_GeminiChatSheet> {
   // Masukkan API Key yang Anda dapatkan dari https://aistudio.google.com/
   // Perhatian: Jangan membagikan Key ini atau mempublikasikannya ke repositori publik!
   // PENTING: Jika error berlanjut, hapus key lama di Google AI Studio dan buat yang baru.
+  // TIPS: Jika --dart-define sulit, hapus String.fromEnvironment(...) dan ganti langsung dengan 'AIzaSy...'
+
+  // Menggunakan String.fromEnvironment adalah cara paling aman agar API Key tidak masuk ke GitHub.
   static const String _apiKey = String.fromEnvironment(
     'GEMINI_API_KEY',
     defaultValue: '',
   );
 
-  late final GenerativeModel _model;
-  late final ChatSession _chatSession;
+  GenerativeModel? _model;
+  ChatSession? _chatSession;
 
   @override
   void initState() {
     super.initState();
-    _model = GenerativeModel(
-      model: 'gemini-2.5-flash',
-      apiKey: _apiKey,
-      systemInstruction: Content.system(
-        'Kamu adalah asisten AI ramah untuk aplikasi "Temu Wisata". Tugasmu membantu pengguna menjawab pertanyaan seputar pariwisata Indonesia, budaya, sejarah, dan fitur aplikasi (Learn, Quiz, Peta Offline). Gunakan bahasa Indonesia yang santun.',
-      ),
-    );
-    _chatSession = _model.startChat();
+    _initializeGemini();
+  }
+
+  void _initializeGemini() {
+    if (_apiKey.isNotEmpty) {
+      try {
+        _model = GenerativeModel(
+          model: 'gemini-2.5-flash', // Menggunakan versi 2.0 yang stabil
+          apiKey: _apiKey,
+          systemInstruction: Content.system(
+            'Kamu adalah asisten AI ramah untuk aplikasi "Temu Wisata". Tugasmu membantu pengguna menjawab pertanyaan seputar pariwisata Indonesia, budaya, sejarah, dan fitur aplikasi (Learn, Quiz, Peta Offline). Gunakan bahasa Indonesia yang santun.',
+          ),
+        );
+        _chatSession = _model!.startChat();
+        debugPrint('Gemini: Sesi chat berhasil dimulai.');
+      } catch (e) {
+        // Menampilkan error detail saat inisialisasi
+        debugPrint('Gemini: Gagal inisialisasi model: $e');
+      }
+    } else {
+      debugPrint(
+        'Gemini: API Key kosong. Gunakan --dart-define atau hardcode di variabel _apiKey.',
+      );
+    }
   }
 
   Future<void> _sendMessage() async {
     final userMessage = _controller.text.trim();
     if (userMessage.isEmpty) return;
+
+    // Pastikan model terinisialisasi
+    if (_model == null) _initializeGemini();
+
+    // Cek apakah API Key sudah terisi
+    if (_apiKey.isEmpty) {
+      setState(() {
+        _messages.add({
+          'role': 'ai',
+          'message':
+              '⚠️ API Key Gemini belum terpasang.\n\n'
+              'Untuk menjalankan fitur ini, gunakan perintah:\n'
+              'flutter run --dart-define=GEMINI_API_KEY=AIzaSyA...\n\n'
+              'Atau gunakan file .vscode/launch.json.',
+        });
+      });
+      _controller.clear();
+      return;
+    }
 
     setState(() {
       _messages.add({'role': 'user', 'message': userMessage});
@@ -299,10 +337,25 @@ class _GeminiChatSheetState extends State<_GeminiChatSheet> {
       _controller.clear();
     });
 
+    if (_chatSession == null) {
+      setState(() {
+        _messages.add({
+          'role': 'ai',
+          'message': 'Gagal memulai percakapan. Pastikan API Key sudah benar.',
+        });
+        _isTyping = false;
+      });
+      return;
+    }
+
     try {
-      final response = await _chatSession.sendMessage(
+      final response = await _chatSession!.sendMessage(
         Content.text(userMessage),
       );
+
+      // Tambahkan log untuk melihat response sukses di konsol
+      debugPrint('Gemini Response: ${response.text}');
+
       setState(() {
         _messages.add({
           'role': 'ai',
@@ -312,11 +365,15 @@ class _GeminiChatSheetState extends State<_GeminiChatSheet> {
     } catch (e) {
       debugPrint('Gemini Error Detail: $e');
 
-      String errorMessage = 'Maaf, terjadi kesalahan koneksi.';
+      String errorMessage = 'Maaf, terjadi kesalahan: ${e.toString()}';
 
-      if (e.toString().contains('API_KEY_INVALID')) {
+      if (e.toString().contains('API_KEY_INVALID') ||
+          e.toString().contains('invalid api key')) {
         errorMessage =
             'API Key tidak valid. Silakan buat Key baru di Google AI Studio.';
+      } else if (e.toString().contains('User location is not supported')) {
+        errorMessage =
+            'Gemini API belum tersedia di wilayah Anda atau gunakan VPN.';
       } else if (e.toString().contains('429')) {
         errorMessage = 'Kuota API habis. Silakan tunggu beberapa saat.';
       } else if (e.toString().contains('SAFETY')) {
